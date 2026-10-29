@@ -20,15 +20,26 @@ function populate(c) {
   state = c;
   for (const k of ['provider', 'protocol', 'baseUrl', 'model', 'tokenField', 'maxTokens', 'dailyLimit', 'systemPrompt', 'skillId', 'publicUrl', 'webhookUrl']) $(k).value = c[k] ?? '';
   $('extra').value = JSON.stringify(c.extra || {});
+  $('waitSec').value = c.waitMs / 1000; $('timeoutSec').value = c.timeoutMs / 1000;
   $('allowedUserIds').value = c.allowedUserIds.join('\n');
   $('apiKey').value = ''; $('clearApiKey').checked = false;
   $('keyHint').textContent = c.hasApiKey ? 'Ключ уже сохранен. Пустое поле оставит его без изменений, если сервис и адрес прежние.' : 'Ключ нужен у большинства облачных провайдеров. Для локальной Ollama обычно можно оставить поле пустым.';
   docs();
 }
+function seconds(id, min, max, message) {
+  const value = Number(String($(id).value).replace(',', '.'));
+  if ($(id).value === '' || !Number.isFinite(value) || value < min || value > max) throw new Error(message);
+  return Math.round(value * 1000);
+}
+function showUsage(usage) {
+  if (usage) $('usage').textContent = `Запросов к ИИ сегодня: ${usage.used} из ${usage.limit}.`;
+}
 function patch() {
   const data = {};
   for (const k of ['provider', 'protocol', 'baseUrl', 'model', 'tokenField', 'systemPrompt', 'skillId', 'publicUrl', 'apiKey']) data[k] = $(k).value.trim();
   for (const k of ['maxTokens', 'dailyLimit']) data[k] = Number($(k).value);
+  data.waitMs = seconds('waitSec', 0, 1.8, 'Ожидание до фразы об ожидании: от 0 до 1,8 секунды.');
+  data.timeoutMs = seconds('timeoutSec', 1, 120, 'Максимальное время ответа ИИ: от 1 до 120 секунд.');
   data.clearApiKey = $('clearApiKey').checked;
   data.allowedUserIds = $('allowedUserIds').value.split('\n').map(x => x.trim()).filter(Boolean);
   try { data.extra = JSON.parse($('extra').value || '{}'); } catch { throw new Error('В дополнительных параметрах нужен корректный JSON. Например: {}'); }
@@ -43,7 +54,7 @@ async function login() {
   const data = await request('/api/config'); presets = data.presets;
   $('provider').replaceChildren();
   for (const [id, item] of Object.entries(presets)) $('provider').add(new Option(item.name, id));
-  populate(data.config);
+  populate(data.config); showUsage(data.usage);
   $('login').hidden = true; $('workspace').hidden = false; $('admin').value = '';
   $('userHint').textContent = data.lastUserId ? `ID последнего разрешенного пользователя: ${data.lastUserId}` : 'ID появится после обращения к настроенному навыку и нажатия «Обновить адрес».';
 }
@@ -63,17 +74,17 @@ $('modelsButton').onclick = () => action('modelsButton', async () => {
 $('testButton').onclick = () => action('testButton', async () => {
   $('testResult').textContent = 'Проверяем подключение…';
   try {
-    const data = await request('/api/test', patch());
+    const data = await request('/api/test', patch()); showUsage(data.usage);
     $('testResult').textContent = `${data.text} Время API: ${(data.elapsedMs / 1000).toFixed(1)} с. ${data.elapsedMs > 1500 ? 'Для такого ответа может понадобиться команда «Ответ готов?».' : 'Быстрый ответ. Скорость в следующий раз может отличаться.'}`;
   } catch (e) { $('testResult').textContent = ''; throw e; }
 });
 $('saveButton').onclick = () => action('saveButton', async () => {
-  const data = await request('/api/config', patch()); populate(data.config);
+  const data = await request('/api/config', patch()); populate(data.config); showUsage(data.usage);
   $('saveResult').textContent = data.config.configured ? 'Сохранено. Скопируй Webhook URL ниже.' : 'Сохранено. Для запуска заполни модель, базовый адрес API и ID навыка.';
 });
 $('refreshButton').onclick = () => action('refreshButton', async () => {
   const data = await request('/api/config');
-  $('publicUrl').value = data.config.publicUrl; $('webhookUrl').value = data.config.webhookUrl;
+  $('publicUrl').value = data.config.publicUrl; $('webhookUrl').value = data.config.webhookUrl; showUsage(data.usage);
   $('userHint').textContent = data.lastUserId ? `ID последнего разрешенного пользователя: ${data.lastUserId}` : 'Пользователь еще не обращался к настроенному навыку.';
 });
 $('copyButton').onclick = () => action('copyButton', async () => {

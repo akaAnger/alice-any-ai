@@ -47,3 +47,4 @@ test('Список моделей уникальный и отсортирова
 test('Локальный провайдер без ключа не получает фиктивный Bearer', () => {
   const r = buildRequest({ ...config(), apiKey: '' }, []); assert.equal(r.headers.authorization, undefined);
 });
+test('Буква ё сохраняется для правильного произношения', () => assert.equal(cleanText('Всё готово, её ёлка.'), 'Всё готово, её ёлка.'));

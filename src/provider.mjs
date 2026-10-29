@@ -10,7 +10,6 @@ export function cleanText(text) {
     .replace(/https?:\/\/\S+/g, '[ссылка]')
     .replace(/[`*_#]/g, '')
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
-    .replace(/\u0451/g, 'е').replace(/\u0401/g, 'Е')
     .replace(/\s+/g, ' ').trim();
 }
 
@@ -34,19 +33,19 @@ async function readLimited(response) {
     chunks.push(chunk);
   }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-  catch { throw new ProviderError('format', 'Ответ API не похож на JSON. Проверьте базовый адрес.'); }
+  catch { throw new ProviderError('format', 'Ответ API не похож на JSON. Проверь базовый адрес.'); }
 }
 
 function statusError(status) {
   const messages = {
-    400: 'API отклонил параметры. Проверьте модель, поле лимита токенов и дополнительные параметры.',
-    401: 'Провайдер не принял API-ключ. Проверьте его в панели настройки.',
+    400: 'API отклонил параметры. Проверь модель, поле лимита токенов и дополнительные параметры.',
+    401: 'Провайдер не принял API-ключ. Проверь его в панели настройки.',
     402: 'Провайдер сообщил о проблеме с оплатой или балансом.',
-    403: 'Провайдер запретил запрос. Проверьте доступ к модели и регион сервера.',
-    404: 'Не найдена модель или адрес API. Проверьте настройки.',
-    429: 'У провайдера исчерпан лимит запросов или квота. Повторите позже.'
+    403: 'Провайдер запретил запрос. Проверь доступ к модели и регион сервера.',
+    404: 'Не найдена модель или адрес API. Проверь настройки.',
+    429: 'У провайдера исчерпан лимит запросов или квота. Повтори позже.'
   };
-  return new ProviderError(`http_${status}`, messages[status] || 'Сервис ИИ временно недоступен. Повторите позже.');
+  return new ProviderError(`http_${status}`, messages[status] || 'Сервис ИИ временно недоступен. Повтори позже.');
 }
 
 export async function requestJson(url, options, fetchFn = fetch) {
@@ -56,8 +55,8 @@ export async function requestJson(url, options, fetchFn = fetch) {
     return await readLimited(response);
   } catch (e) {
     if (e instanceof ProviderError) throw e;
-    if (options.signal?.aborted || ['AbortError', 'TimeoutError'].includes(e.name)) throw new ProviderError('timeout', 'Не удалось дождаться ответа ИИ. Попробуйте более быструю модель.');
-    throw new ProviderError('network', 'Не удалось связаться с API. Проверьте адрес, интернет и доступность провайдера с сервера.');
+    if (options.signal?.aborted || ['AbortError', 'TimeoutError'].includes(e.name)) throw new ProviderError('timeout', 'Не удалось дождаться ответа ИИ. Попробуй более быструю модель.');
+    throw new ProviderError('network', 'Не удалось связаться с API. Проверь адрес, интернет и доступность провайдера с сервера.');
   }
 }
 
@@ -72,7 +71,7 @@ export async function complete(c, messages, signal, fetchFn = fetch) {
     text = typeof content === 'string' ? content : Array.isArray(content) ? content.filter(x => x.type === 'text').map(x => x.text).join(' ') : message?.refusal;
   }
   const cleaned = cleanText(text ?? '');
-  if (!cleaned) throw new ProviderError('empty', 'Модель не вернула текст. Проверьте поддержку чата или увеличьте лимит токенов для рассуждающей модели.');
+  if (!cleaned) throw new ProviderError('empty', 'Модель не вернула текст. Проверь поддержку чата или увеличь лимит токенов для рассуждающей модели.');
   return cleaned;
 }
 

@@ -23,15 +23,15 @@ try {
   console.log(`Alice Any AI запущен. Панель: ${config.publicUrl || local}`);
   if (['127.0.0.1', 'localhost', '::1'].includes(host)) {
     const setup = `${local}/#${encodeURIComponent(config.adminToken)}`;
-    console.log(`Личная ссылка настройки (не публикуйте): ${setup}`);
+    console.log(`Личная ссылка настройки (не публикуй): ${setup}`);
     if (process.argv.includes('--open')) {
       let child;
       if (process.platform === 'win32') child = spawn('cmd.exe', ['/d', '/s', '/c', 'start', '""', setup], { stdio: 'ignore' });
       else if (process.platform === 'darwin') child = spawn('open', [setup], { stdio: 'ignore' });
       else child = spawn('xdg-open', [setup], { stdio: 'ignore' });
-      child.on('error', () => console.log('Откройте личную ссылку настройки вручную.'));
+      child.on('error', () => console.log('Открой личную ссылку настройки вручную.'));
     }
-  } else console.log('Для входа используйте ADMIN_TOKEN из переменных окружения. Секреты в общие логи не выводятся.');
+  } else console.log('Для входа используй ADMIN_TOKEN из переменных окружения. Секреты в общие логи не выводятся.');
   if (process.argv.includes('--tunnel')) {
     // Используем установленный пользователем cloudflared; ничего не скачиваем и не исполняем из сети.
     tunnel = spawn('cloudflared', ['--no-autoupdate', 'tunnel', '--url', local], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -40,15 +40,15 @@ try {
       buffer = (buffer + data.toString()).slice(-6000);
       const match = buffer.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
       if (match && app.config.publicUrl !== match[0]) {
-        app.setPublicUrl(match[0]); console.log('Временный HTTPS-адрес готов. Нажмите «Обновить адрес» в панели. После перезапуска туннеля адрес изменится.');
+        app.setPublicUrl(match[0]); console.log('Временный HTTPS-адрес готов. Нажми «Обновить адрес» в панели. После перезапуска туннеля адрес изменится.');
       }
     };
     tunnel.stdout.on('data', receive); tunnel.stderr.on('data', receive);
-    tunnel.on('error', () => console.log('cloudflared не найден. Локальная панель работает. Установите cloudflared по docs/LOCAL.md или используйте облачное размещение.'));
-    tunnel.on('exit', code => { if (code) console.log('Туннель завершился. Проверьте установку cloudflared и интернет. Панель продолжает работать локально.'); });
+    tunnel.on('error', () => console.log('cloudflared не найден. Локальная панель работает. Установи cloudflared по docs/LOCAL.md или используй облачное размещение.'));
+    tunnel.on('exit', code => { if (code) console.log('Туннель завершился. Проверь установку cloudflared и интернет. Панель продолжает работать локально.'); });
   }
 } catch (e) {
-  console.error(e.code === 'EADDRINUSE' ? 'Порт занят. Закройте другую копию программы или укажите другой PORT.' : e.message);
+  console.error(e.code === 'EADDRINUSE' ? 'Порт занят. Закрой другую копию программы или укажи другой PORT.' : e.message);
   process.exitCode = 1;
 }
 
