@@ -38,16 +38,16 @@ export function validateBaseUrl(value) {
   if (!raw) return '';
   let url;
   try { url = new URL(raw); } catch { throw new Error('Адрес API должен начинаться с https:// или локального http://.'); }
-  if (url.username || url.password || url.search || url.hash) throw new Error('Не помещайте ключ, параметры или пароль в адрес API.');
+  if (url.username || url.password || url.search || url.hash) throw new Error('Не помещай ключ, параметры или пароль в адрес API.');
   const local = ['localhost', '127.0.0.1', '[::1]', 'host.docker.internal'].includes(url.hostname);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) throw new Error('HTTP разрешен только для локального API. Для других адресов нужен HTTPS.');
-  if (/\/(chat\/completions|messages|models)\/?$/.test(url.pathname)) throw new Error('Укажите базовый адрес API, без /chat/completions, /messages или /models.');
+  if (/\/(chat\/completions|messages|models)\/?$/.test(url.pathname)) throw new Error('Укажи базовый адрес API, без /chat/completions, /messages или /models.');
   return url.href.replace(/\/+$/, '');
 }
 
 export function validateConfig(input) {
   const c = { ...input };
-  if (!Object.hasOwn(PRESETS, c.provider)) throw new Error('Выберите известного провайдера или «Другой совместимый API».');
+  if (!Object.hasOwn(PRESETS, c.provider)) throw new Error('Выбери известного провайдера или «Другой совместимый API».');
   if (!['chat', 'anthropic'].includes(c.protocol)) throw new Error('Поддерживаются Chat Completions и Anthropic Messages.');
   c.baseUrl = validateBaseUrl(c.baseUrl);
   for (const [name, max] of [['model', 256], ['apiKey', 4096], ['skillId', 128], ['systemPrompt', 4000]]) c[name] = str(c[name], name, max);
@@ -111,7 +111,7 @@ export async function saveConfig(dir, config) {
 export async function loadConfig(dir, env = process.env) {
   let stored = {};
   try { stored = JSON.parse(await readFile(join(dir, 'config.json'), 'utf8')); }
-  catch (e) { if (e.code !== 'ENOENT') throw new Error('Не удалось прочитать .data/config.json. Исправьте файл или восстановите резервную копию.'); }
+  catch (e) { if (e.code !== 'ENOENT') throw new Error('Не удалось прочитать .data/config.json. Исправь файл или восстанови резервную копию.'); }
   const c = { ...defaults(), ...stored };
   if (env.ADMIN_TOKEN) c.adminToken = env.ADMIN_TOKEN;
   if (env.WEBHOOK_SECRET) c.webhookSecret = env.WEBHOOK_SECRET;

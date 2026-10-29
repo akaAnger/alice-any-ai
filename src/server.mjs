@@ -80,27 +80,27 @@ export async function createApplication({ config, dataDir, generate = complete, 
         const asset = assets.get(pathname); return send(res, 200, asset.body, asset.type);
       }
       if (pathname.startsWith('/api/')) {
-        if (!apiRateLimit(req.socket.remoteAddress || 'unknown')) return send(res, 429, { error: 'Слишком много обращений к панели. Повторите через минуту.' });
+        if (!apiRateLimit(req.socket.remoteAddress || 'unknown')) return send(res, 429, { error: 'Слишком много обращений к панели. Повтори через минуту.' });
         if (!originAllowed(req)) return send(res, 403, { error: 'Запрос с другого сайта запрещен.' });
         const token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : '';
         if (!secretEquals(token, current.adminToken)) return send(res, 401, { error: 'Нужен ключ администратора панели, а не ключ ИИ.' });
-        if (req.method === 'GET' && pathname === '/api/config') return send(res, 200, { config: publicConfig(current), presets: PRESETS, lastUserId, active: engine.active, daily: engine.daily });
+        if (req.method === 'GET' && pathname === '/api/config') return send(res, 200, { config: publicConfig(current), presets: PRESETS, lastUserId, active: engine.active, usage: engine.usage() });
         if (req.method !== 'POST') return send(res, 405, { error: 'Метод не поддерживается.' });
         if (!(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) return send(res, 415, { error: 'Нужен Content-Type: application/json.' });
         const patch = await readJson(req);
         let next;
         try { next = mergeEditable(current, patch); } catch (e) { return send(res, 400, { error: e.message }); }
         if (pathname === '/api/config') {
-          if (writeBusy || adminActive) return send(res, 409, { error: 'Дождитесь завершения проверки или сохранения.' });
+          if (writeBusy || adminActive) return send(res, 409, { error: 'Дождись завершения проверки или сохранения.' });
           writeBusy = true;
           try { await persist(dataDir, next); current = next; engine.clearSessions(); }
           finally { writeBusy = false; }
-          return send(res, 200, { config: publicConfig(current) });
+          return send(res, 200, { config: publicConfig(current), usage: engine.usage() });
         }
         if (pathname === '/api/test' || pathname === '/api/models') {
-          if (adminActive || writeBusy) return send(res, 409, { error: 'Дождитесь завершения текущей операции.' });
-          if (!next.baseUrl) return send(res, 400, { error: 'Укажите базовый адрес API.' });
-          if (pathname === '/api/test' && !next.model) return send(res, 400, { error: 'Укажите идентификатор модели.' });
+          if (adminActive || writeBusy) return send(res, 409, { error: 'Дождись завершения текущей операции.' });
+          if (!next.baseUrl) return send(res, 400, { error: 'Укажи базовый адрес API.' });
+          if (pathname === '/api/test' && !next.model) return send(res, 400, { error: 'Укажи идентификатор модели.' });
           if (pathname === '/api/test') {
             const problem = engine.reserve();
             if (problem) return send(res, 429, { error: problem });
@@ -111,21 +111,21 @@ export async function createApplication({ config, dataDir, generate = complete, 
             if (pathname === '/api/models') return send(res, 200, { models: await models(next) });
             const started = Date.now();
             const text = await generate(next, [{ role: 'user', content: 'Ответь одной короткой фразой: подключение работает.' }], new AbortController().signal);
-            return send(res, 200, { text: text.slice(0, 1024), elapsedMs: Date.now() - started });
+            return send(res, 200, { text: text.slice(0, 1024), elapsedMs: Date.now() - started, usage: engine.usage() });
           } catch (e) { return send(res, 502, { error: e instanceof ProviderError ? e.message : 'Ошибка проверки подключения.' }); }
           finally { adminActive--; if (pathname === '/api/test') engine.active--; }
         }
         return send(res, 404, { error: 'Не найдено.' });
       }
       if (pathname.startsWith('/alice/')) {
-        if (req.method !== 'POST') return send(res, 405, { error: 'Используйте POST.' });
+        if (req.method !== 'POST') return send(res, 405, { error: 'Используй POST.' });
         let supplied;
         try { supplied = decodeURIComponent(pathname.slice('/alice/'.length)); } catch { return send(res, 404, { error: 'Не найдено.' }); }
         if (!secretEquals(supplied, current.webhookSecret)) return send(res, 404, { error: 'Не найдено.' });
         if (!(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) return send(res, 415, { error: 'Нужен JSON.' });
         const body = await readJson(req);
         if (!validateEnvelope(body)) return send(res, 400, { error: 'Некорректный запрос Диалогов.' });
-        if (!isConfigured(current)) return send(res, 200, reply('Сначала завершите настройку ИИ и идентификатора навыка в панели.'));
+        if (!isConfigured(current)) return send(res, 200, reply('Сначала заверши настройку ИИ и идентификатора навыка в панели.'));
         if (body.session.skill_id !== current.skillId) return send(res, 403, { error: 'Неверный идентификатор навыка.' });
         const userId = body.session.user?.user_id || '';
         if (current.allowedUserIds.length && !current.allowedUserIds.includes(userId)) return send(res, 200, reply('Этот пользователь не допущен к навыку.', [], true));
@@ -134,7 +134,7 @@ export async function createApplication({ config, dataDir, generate = complete, 
       }
       return send(res, 404, { error: 'Не найдено.' });
     } catch (e) {
-      if (!res.headersSent && !res.destroyed) send(res, e.status || 500, { error: e.status ? e.message : 'Внутренняя ошибка сервера. Проверьте доступ к папке данных.' });
+      if (!res.headersSent && !res.destroyed) send(res, e.status || 500, { error: e.status ? e.message : 'Внутренняя ошибка сервера. Проверь доступ к папке данных.' });
     }
   });
   server.requestTimeout = 10000;

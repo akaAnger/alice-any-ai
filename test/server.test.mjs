@@ -71,3 +71,14 @@ test('Сервер без ID навыка не отправляет платны
   const r = await f.post(webhookPath(f.config), event('Вопрос'));
   assert.match((await r.json()).response.text, /настройку/); assert.equal(f.calls(), 0);
 });
+test('Панель видит дневной счетчик запросов', async t => {
+  const f = await fixture(t, { dailyLimit: 5 });
+  assert.deepEqual((await (await fetch(f.base + '/api/config', { headers: f.auth })).json()).usage, { used: 0, limit: 5 });
+  assert.deepEqual((await (await f.post('/api/test', {}, f.auth)).json()).usage, { used: 1, limit: 5 });
+});
+test('Время ожидания и таймаут меняются из панели', async t => {
+  const f = await fixture(t);
+  assert.equal((await f.post('/api/config', { waitMs: 1200, timeoutMs: 30000 }, f.auth)).status, 200);
+  assert.equal(f.app.config.waitMs, 1200); assert.equal(f.app.config.timeoutMs, 30000);
+  assert.equal((await f.post('/api/config', { waitMs: 4500 }, f.auth)).status, 400);
+});

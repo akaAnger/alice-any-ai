@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaults } from '../src/config.mjs';
-import { SkillEngine, validateEnvelope, splitAnswer } from '../src/skill.mjs';
+import { SkillEngine, validateEnvelope, splitAnswer, commandOf } from '../src/skill.mjs';
 
 export function envelope(command = '', id = 0, session = 'session-1', user = 'user-1') {
   return { version: '1.0', session: { session_id: session, skill_id: 'fixture-skill', message_id: id, new: id === 0, user: { user_id: user }, application: { application_id: 'device-1' } }, request: { type: 'SimpleUtterance', command } };
@@ -16,8 +16,9 @@ test('Проверка структуры входного запроса', () =
 });
 test('Приветствие и помощь не вызывают API', async () => {
   let calls = 0; const engine = setup({ generate: async () => { calls++; return 'Ответ'; } });
-  assert.match((await engine.handle(envelope())).response.text, /отдельный навык/);
-  await engine.handle(envelope('помощь', 1)); assert.equal(calls, 0);
+  const greeting = (await engine.handle(envelope())).response.text;
+  assert.match(greeting, /на связи/); assert.ok(greeting.length < 120, 'Приветствие должно быть коротким');
+  assert.match((await engine.handle(envelope('помощь', 1))).response.text, /отдельный навык/); assert.equal(calls, 0);
 });
 test('Первый вопрос в новой сессии не теряется', async () => {
   let prompt; const engine = setup({ generate: async (c, messages) => { prompt = messages.at(-1).content; return 'Четыре.'; } });
@@ -75,7 +76,7 @@ test('Число сессий ограничено; устаревшие зап�
   await engine.handle(envelope('', 0, 'one'));
   assert.match((await engine.handle(envelope('', 0, 'two'))).response.text, /занят/);
   now += 21 * 60000;
-  assert.match((await engine.handle(envelope('', 0, 'two'))).response.text, /отдельный навык/);
+  assert.match((await engine.handle(envelope('', 0, 'two'))).response.text, /на связи/);
   assert.equal(engine.sessions.size, 1);
 });
 test('Старые message_id не инициируют генерацию', async () => {
@@ -89,5 +90,58 @@ test('Команда выхода завершает сессию', async () => 
 test('Пустой command при наличии original_utterance остается приветствием', async () => {
   const engine = setup({ generate: async () => { throw new Error('Не должно вызываться'); } });
   const e = envelope(); e.request.original_utterance = 'Алиса запусти навык';
-  assert.match((await engine.handle(e)).response.text, /отдельный навык/);
+  assert.match((await engine.handle(e)).response.text, /на связи/);
+});
+test('Команды узнаются с вежливыми и служебными словами', () => {
+  for (const [phrase, action] of [['Повтори, пожалуйста', 'repeat'], ['Можешь повторить?', 'repeat'], ['Ещё раз', 'repeat'], ['Давай дальше', 'next'], ['Продолжай', 'next'],
+    ['Ну что там?', 'poll'], ['Ответ готов?', 'poll'], ['Так, что там', 'poll'], ['Алиса, стоп', 'stop'], ['Отмени, пожалуйста', 'cancel'], ['Сменим тему', 'reset'], ['Какие команды?', 'help']]) {
+    assert.equal(commandOf(phrase), action, phrase);
+  }
+});
+test('Обычные вопросы не принимаются за команды', () => {
+  for (const phrase of ['Почему небо голубое', 'Расскажи, что дальше будет с экономикой', 'Хорошо', 'Повтори таблицу умножения на семь', '', 'Что']) assert.equal(commandOf(phrase), '', phrase);
+});
+test('«Повтори, пожалуйста» не создает платный запрос', async () => {
+  let calls = 0; const engine = setup({ generate: async () => { calls++; return 'Первый ответ.'; } });
+  await engine.handle(envelope('Вопрос'));
+  assert.equal((await engine.handle(envelope('Повтори, пожалуйста', 1))).response.text, 'Первый ответ.');
+  assert.equal((await engine.handle(envelope('Давай дальше', 2))).response.text, 'Продолжения нет. Задай новый вопрос.');
+  assert.equal(calls, 1);
+});
+test('Готовый ответ отдается сразу, даже если сказали другую фразу', async () => {
+  let resolve, calls = 0; const engine = setup({ generate: () => { calls++; return new Promise(r => { resolve = r; }); } });
+  await engine.handle(envelope('Первый вопрос'));
+  resolve('Подготовленный ответ.'); await tick();
+  assert.equal((await engine.handle(envelope('Второй вопрос', 1))).response.text, 'Сначала ответ на прошлый вопрос. Подготовленный ответ.');
+  assert.equal(calls, 1);
+});
+test('Готовый ответ переживает закрытие сессии и не оплачивается повторно', async () => {
+  let resolve, calls = 0; const engine = setup({ generate: () => { calls++; return new Promise(r => { resolve = r; }); } });
+  assert.match((await engine.handle(envelope('Сложный вопрос', 0, 'old'))).response.text, /Ответ готов/);
+  assert.match((await engine.handle(envelope('Ответ готов?', 0, 'new'))).response.text, /готовлю/);
+  resolve('Подготовленный ответ.'); await tick();
+  assert.equal((await engine.handle(envelope('Ответ готов?', 1, 'new'))).response.text, 'Подготовленный ответ.');
+  assert.match((await engine.handle(envelope('Ответ готов?', 1, 'old'))).response.text, /Ожидающего ответа нет/);
+  assert.equal(calls, 1);
+});
+test('Новая сессия сразу отдает ответ, готовый после закрытия прошлой', async () => {
+  let resolve; const engine = setup({ generate: () => new Promise(r => { resolve = r; }) });
+  await engine.handle(envelope('Вопрос', 0, 'old')); resolve('Готовый ответ.'); await tick();
+  assert.equal((await engine.handle(envelope('', 0, 'new'))).response.text, 'Ответ на прошлый вопрос. Готовый ответ.');
+});
+test('Чужой пользователь и старый ответ не переносятся', async () => {
+  let now = Date.now(), resolve; const engine = setup({ now: () => now, generate: () => new Promise(r => { resolve = r; }) });
+  await engine.handle(envelope('Вопрос', 0, 'old', 'one')); resolve('Ответ первого.'); await tick();
+  assert.match((await engine.handle(envelope('', 0, 'other', 'two'))).response.text, /на связи/);
+  now += 11 * 60000;
+  assert.match((await engine.handle(envelope('', 0, 'late', 'one'))).response.text, /на связи/);
+});
+test('Непрочитанное продолжение длинного ответа переносится в новую сессию', async () => {
+  const long = Array.from({ length: 60 }, (_, i) => `Это предложение номер ${i + 1} для проверки длины.`).join(' ');
+  const engine = setup({ generate: async () => long });
+  const first = (await engine.handle(envelope('Расскажи', 0, 'old'))).response.text;
+  assert.match((await engine.handle(envelope('', 0, 'new'))).response.text, /продолжение/);
+  const next = (await engine.handle(envelope('Дальше', 1, 'new'))).response.text;
+  assert.ok(next.length > 0 && next !== first);
+  assert.equal((await engine.handle(envelope('Повтори', 2, 'new'))).response.text, next);
 });
